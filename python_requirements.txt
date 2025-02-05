@@ -1,0 +1,8 @@
+bleak    >= 0.22.3
+guizero  >= 1.5.0
+logging  >= 0.4.9.6
+pillow   >= 11.0
+pyserial >= 3.5
+pystray  >= 0.19.5
+pywin32  >= 308
+requests >= 2.32.3
