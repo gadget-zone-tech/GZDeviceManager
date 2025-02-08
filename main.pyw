@@ -1,6 +1,7 @@
 from PIL                     import Image
 from settings                import Settings
 from bleak                   import BleakScanner, BleakClient
+from win11toast              import toast
 import datetime, os, threading, time
 import asyncio, logging
 import guizero, pystray, ctypes
@@ -71,39 +72,6 @@ if __name__ == '__main__':
 			time.sleep(0.1)
 
 
-# GUIZERO SETUP
-if __name__ == '__main__':
-	app_id = "GZDeviceManager"
-	ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
-	
-	app = guizero.App(
-		title = "GZDeviceManager",
-		visible = False
-	)	
-	app.tk.iconbitmap(os.path.dirname(os.path.realpath(__file__)) + "\\assets\\gz_64.ico")
-
-	def app_exit_check():
-		global exit_flag
-		if (exit_flag):
-			exit()
-	app.repeat(1000, app_exit_check)
-
-	def app_exit():
-		global exit_flag
-		exit_flag = True
-		exit()
-	app.when_closed = app_exit
-
-	app.icon = root_path + '\\assets\\gz_64.ico'
-
-	for claimed_device in settings.claimed_devices:
-		if (claimed_device.update_interval > 0):
-			app.repeat(
-				claimed_device.update_interval,
-				claimed_device.update,
-			)
-
-
 # SYSTEM TRAY MENU SETUP
 if __name__ == '__main__':
 	def on_click_manager(icon, item):
@@ -137,10 +105,50 @@ if __name__ == '__main__':
 	)
 
 
+# GUIZERO SETUP
+if __name__ == '__main__':
+	app_id = "GZDeviceManager"
+	ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+	
+	app = guizero.App(
+		title = "GZDeviceManager",
+		visible = False
+	)	
+	app.tk.iconbitmap(os.path.dirname(os.path.realpath(__file__)) + "\\assets\\gz_64.ico")
+
+	def app_exit_check():
+		global exit_flag
+		if (settings.exit_flag):
+			exit_flag = True
+		if (exit_flag):
+			icon.stop()
+			exit()
+	app.repeat(1000, app_exit_check)
+
+	def app_exit():
+		global exit_flag
+		exit_flag = True
+		exit()
+	app.when_closed = app_exit
+
+	app.icon = root_path + '\\assets\\gz_64.ico'
+
+	for claimed_device in settings.claimed_devices:
+		if (claimed_device.update_interval > 0):
+			app.repeat(
+				claimed_device.update_interval,
+				claimed_device.update,
+			)
+
+
 # START
 if __name__ == '__main__':
 	threading.Thread(target=icon.run).start()
 	threading.Thread(target=bt_manager).start()
-	if (settings.update_required):
-		pystray.Icon.notify("New version of GZDeviceManager is available!")
+	if (settings.update_required and (settings.config["settings"]["new_version_notify"] == "True")):
+		toast(
+			"GZDeviceManager",
+			"New version of GZDeviceManager is available!",
+			icon = os.path.dirname(os.path.realpath(__file__)) + "\\assets\\gz_64.ico",
+		)
 	app.display()

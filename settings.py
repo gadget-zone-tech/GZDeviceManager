@@ -10,6 +10,7 @@ class Settings:
 	update_required = False
 	config          = configparser.ConfigParser()
 	claimed_devices = []
+	exit_flag       = False
 	_version        = None
 	_subversion     = None
 	_revision       = None
@@ -18,6 +19,7 @@ class Settings:
 	_window         = None
 	_devices_box    = None
 	_logger         = None
+	_version_notifications_check_box = None
 
 	def __init__(self):
 		self._logger = logging.getLogger(__name__)
@@ -54,13 +56,14 @@ class Settings:
 			)
 			if (response.status_code == 200):
 				response_j = response.json()
-				version    = int(response_j["name"].split(".")[0])
-				subversion = int(response_j["name"].split(".")[1])
-				revision   = int(response_j["name"].split(".")[2])
+				tag_number = response_j["tag_name"].split("-")[0].replace("v", "")
+				version    = int(tag_number.split(".")[0])
+				subversion = int(tag_number.split(".")[1])
+				revision   = int(tag_number.split(".")[2])
 				if ((version > self._version) or 
 					(subversion > self._subversion) or 
 					(revision > self._revision)):
-					update_required = True
+					self.update_required = True
 		except Exception as exc:
 			print(exc)
 	
@@ -73,7 +76,6 @@ class Settings:
 					info['settings'],
 				)
 			)
-			print(self.claimed_devices[0].get_settings())
 
 	def on_click(self):
 		pass
@@ -114,28 +116,42 @@ class Settings:
 					self._devices_box.update()
 
 	def on_click_update(self):
-		response = requests.get(self.config["settings"]["update_url"])
+		response    = requests.get(self.config["settings"]["update_url"])
 		if (response.status_code == 200):
+			commit_info = requests.get(
+				self.config["settings"]["update_url"].replace(
+					"releases/latest",
+					"git/refs/tags/" + response.json()["tag_name"]
+				)
+			).json()
 			download = requests.get(response.json()["zipball_url"])
-			with open(os.path.dirname(os.path.realpath(__file__)) + '//tmp//update.tar.gz', 'wb') as temp_file:
+			with open(os.path.dirname(os.path.realpath(__file__)) + '//tmp//update.zip', 'wb') as temp_file:
 				temp_file.write(download.content)
 				with zipfile.ZipFile(temp_file.name) as zip_file:
-					zip_file.extractall(os.path.dirname(os.path.realpath(__file__)) + "//tmp//")
+					zip_file.extractall(
+						os.path.dirname(os.path.realpath(__file__)) + "//tmp//")
 		try:
 			os.system(
-				"start cmd.exe @cmd /k \'{:s}\'".format(
-					os.path.dirname(os.path.realpath(__file__)) + "//tmp//install.bat"
+				"start cmd.exe @cmd /k \"cd \"{:s}\" && \"{:s}\" && start pythonw \"{:s}\" && {:s}\"".format(
+					os.path.dirname(os.path.realpath(__file__)) + "//tmp//gadget-zone-tech-GZDeviceManager-" + commit_info["object"]["sha"][0:7],
+					os.path.dirname(os.path.realpath(__file__)) + "//tmp//gadget-zone-tech-GZDeviceManager-" + commit_info["object"]["sha"][0:7] + "//install.bat",
+					"C:\\Users\\" + os.getlogin() + "\\AppData\\Local\\Programs\\GZDeviceManager\\main.pyw",
+					"exit"
 				)
 			)
-			shutil.rmtree(
-				os.path.dirname(os.path.realpath(__file__)) + "//tmp//"
-			)
-			os.mkdir(
-				os.path.dirname(os.path.realpath(__file__)) + "//tmp//"
-			)
-			os.execl(sys.executable, sys.executable, *sys.argv)
+			self.exit_flag = True
 		except Exception as err:
 			print(err)
+
+	def on_click_save(self):
+		with open(os.path.dirname(os.path.realpath(__file__)) + "//config.ini", "w") as configfile:
+			self.config.write(configfile)
+
+	def on_click_version_notification_check_box(self):
+		if self._version_notifications_check_box.value:
+			self.config["settings"]["new_version_notify"] = "True"
+		else:
+			self.config["settings"]["new_version_notify"] = "False"
 
 	def _check_connections(self):
 		pass
@@ -222,8 +238,8 @@ class Settings:
 		guizero.PushButton(
 			button_box,
 			text    = "Save Manager Settings",
-			enabled = False,
-			command = self.on_click_update,
+			enabled = True,
+			command = self.on_click_save,
 			height  = 2,
 			width   = 25,
 		)
@@ -236,7 +252,65 @@ class Settings:
 			width  = 500,
 			border = 1
 		)
+
+		version_box = guizero.Box(
+			settings_box,
+			align   = "top",
+			width   = "fill",
+		)
+
+		version_text_box = guizero.Box(
+			version_box,
+			align   = "left",
+			width   = 250,
+			height  = 18,
+		)
+
+		guizero.Text(
+			version_text_box,
+			text    = "Program version:",
+			align   = "left"
+		)
+
+		version_text = guizero.Text(
+			version_box,
+			text = "v{:d}.{:d}.{:d}".format(
+				self._version,
+				self._subversion,
+				self._revision
+			),
+		)
 		
+		version_notifications_box = guizero.Box(
+			settings_box,
+			align   = "top",
+			width   = "fill",
+		)
+
+		version_notifications_text_box = guizero.Box(
+			version_notifications_box,
+			align   = "left",
+			width   = 250,
+			height  = 18,
+		)
+
+		guizero.Text(
+			version_notifications_text_box,
+			text    = "Show new version notifications:",
+			align   = "left"
+		)
+
+		self._version_notifications_check_box = guizero.CheckBox(
+			version_notifications_box
+		)
+		if self.config["settings"]["new_version_notify"] == "True":
+			self._version_notifications_check_box.value = True
+		else:
+			self._version_notifications_check_box.value = False
+		self._version_notifications_check_box.update_command(
+			self.on_click_version_notification_check_box
+		)
+
 		self._devices_box = guizero.TitleBox(
 			self._window,
 			"Devices",
